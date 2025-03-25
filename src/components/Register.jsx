@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 
 function Register() {
+  const { login, authStatus } = useContext(AuthContext); 
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    role: { roleId: 1 } // Cambia a 2 si tu backend lo necesita
+    role: { roleId: 1 }
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [pendingRedirect, setPendingRedirect] = useState(false); 
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -32,15 +35,45 @@ function Register() {
       body: JSON.stringify(formData)
     });
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (err) {
+      const text = await response.text();
+      console.error("Respuesta no JSON:", text);
+      setError(text || "Respuesta no válida del servidor");
+      return;
+    }
 
     if (data["account: "]) {
-      setSuccess("Cuenta registrada correctamente.");
-      setTimeout(() => navigate("/login"), 1500); // Redirige al login después de 1.5s
-    } else {
-      setError(data["error: "] || "Error al registrar la cuenta.");
+      setSuccess("Account created successfully.");
+    
+      const loginRes = await fetch("http://localhost:8080/auth/accounts/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          username: formData.username,
+          password: formData.password
+        })
+      });
+    
+      if (loginRes.ok) {
+        await login(); 
+        setPendingRedirect(true); 
+      } else {
+        setError("Login authentication failed.");
+      }
     }
   };
+
+  useEffect(() => {
+    if (authStatus === 'authenticated' && pendingRedirect) {
+      navigate("/complete-profile");
+    }
+  }, [authStatus, pendingRedirect, navigate]);
 
   return (
     <div>
